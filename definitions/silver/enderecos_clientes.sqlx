@@ -1,0 +1,30 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "enderecos_clientes",
+  tags: ["silver", "customer-addresses", "pii-protected"],
+  assertions: {
+    uniqueKey: ["endereco_id"]
+  }
+}
+
+SELECT
+  endereco_id,
+  cliente_id,
+  tipo_endereco,
+  CASE
+    WHEN nome_destinatario IS NULL OR TRIM(nome_destinatario) = '' THEN NULL
+    ELSE CONCAT(SUBSTR(TRIM(nome_destinatario), 1, 1), '***')
+  END AS nome_destinatario_mascarado,
+  CASE
+    WHEN cep IS NULL OR TRIM(cep) = '' THEN NULL
+    ELSE CONCAT('***-', RIGHT(REGEXP_REPLACE(cep, r'[^0-9]', ''), 3))
+  END AS cep_mascarado,
+  cidade,
+  estado,
+  pais,
+  padrao,
+  criado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "enderecos_clientes")}

@@ -1,0 +1,22 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "produtos",
+  tags: ["silver", "product-catalog"],
+  assertions: {
+    uniqueKey: ["produto_id"]
+  }
+}
+
+SELECT
+  produto_id,
+  marca_id,
+  categoria_id,
+  nome_produto,
+  descricao,
+  status_produto,
+  criado_em,
+  atualizado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "produtos")}

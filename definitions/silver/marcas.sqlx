@@ -1,0 +1,17 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "marcas",
+  tags: ["silver", "product-catalog"],
+  assertions: {
+    uniqueKey: ["marca_id"]
+  }
+}
+
+SELECT
+  marca_id,
+  nome_marca,
+  criado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "marcas")}

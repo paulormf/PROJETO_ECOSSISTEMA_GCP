@@ -1,0 +1,21 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "itens_pedido",
+  tags: ["silver", "fact-order-items"],
+  assertions: {
+    uniqueKey: ["item_pedido_id"]
+  }
+}
+
+SELECT
+  item_pedido_id,
+  pedido_id,
+  variante_id,
+  quantidade,
+  preco_unitario,
+  desconto_total,
+  total_item,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "itens_pedido")}

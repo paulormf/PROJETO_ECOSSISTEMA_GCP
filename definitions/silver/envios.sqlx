@@ -1,0 +1,27 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "envios",
+  tags: ["silver", "fact-shipments"],
+  assertions: {
+    uniqueKey: ["envio_id"]
+  }
+}
+
+SELECT
+  envio_id,
+  pedido_id,
+  armazem_id,
+  transportadora,
+  CASE
+    WHEN codigo_rastreamento IS NULL OR TRIM(codigo_rastreamento) = '' THEN NULL
+    ELSE CONCAT('***', RIGHT(TRIM(codigo_rastreamento), 4))
+  END AS codigo_rastreamento_mascarado,
+  status_envio,
+  enviado_em,
+  entregue_em,
+  custo_frete,
+  criado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "envios")}

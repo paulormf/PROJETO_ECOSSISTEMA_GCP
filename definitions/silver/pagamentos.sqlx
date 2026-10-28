@@ -1,0 +1,26 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "pagamentos",
+  tags: ["silver", "fact-payments"],
+  assertions: {
+    uniqueKey: ["pagamento_id"]
+  }
+}
+
+SELECT
+  pagamento_id,
+  pedido_id,
+  metodo_pagamento,
+  status_pagamento,
+  valor,
+  parcelas,
+  CASE
+    WHEN referencia_transacao IS NULL OR TRIM(referencia_transacao) = '' THEN NULL
+    ELSE CONCAT('***', RIGHT(TRIM(referencia_transacao), 4))
+  END AS referencia_transacao_mascarada,
+  pago_em,
+  criado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "pagamentos")}

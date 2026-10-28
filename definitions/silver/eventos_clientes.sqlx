@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "eventos_clientes",
+  tags: ["silver", "customer-events", "pii-protected"],
+  assertions: {
+    uniqueKey: ["evento_id"]
+  }
+}
+
+SELECT
+  evento_id,
+  cliente_id,
+  sessao_id,
+  tipo_evento,
+  produto_id,
+  pedido_id,
+  tipo_dispositivo,
+  origem,
+  dados_evento IS NOT NULL AND TRIM(dados_evento) <> '' AS possui_dados_evento,
+  ocorrido_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "eventos_clientes")}

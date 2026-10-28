@@ -1,0 +1,19 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "estoque",
+  tags: ["silver", "inventory"],
+  assertions: {
+    uniqueKey: ["armazem_id", "variante_id"]
+  }
+}
+
+SELECT
+  armazem_id,
+  variante_id,
+  quantidade_disponivel,
+  quantidade_reservada,
+  atualizado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "estoque")}

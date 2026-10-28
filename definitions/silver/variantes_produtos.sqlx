@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "variantes_produtos",
+  tags: ["silver", "product-catalog"],
+  assertions: {
+    uniqueKey: ["variante_id"]
+  }
+}
+
+SELECT
+  variante_id,
+  produto_id,
+  sku,
+  nome_variante,
+  preco_custo,
+  preco_venda,
+  peso_gramas,
+  ativo,
+  criado_em,
+  atualizado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "variantes_produtos")}
