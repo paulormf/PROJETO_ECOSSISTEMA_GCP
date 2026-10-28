@@ -1,0 +1,31 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "clientes",
+  tags: ["silver", "pii-protected"],
+  assertions: {
+    uniqueKey: ["cliente_id"]
+  }
+}
+
+SELECT
+  cliente_id,
+  CASE
+    WHEN nome_completo IS NULL OR TRIM(nome_completo) = '' THEN NULL
+    ELSE TO_HEX(SHA256(LOWER(TRIM(nome_completo))))
+  END AS nome_hash,
+  CASE
+    WHEN email IS NULL OR TRIM(email) = '' THEN NULL
+    ELSE TO_HEX(SHA256(LOWER(TRIM(email))))
+  END AS email_hash,
+  CASE
+    WHEN telefone IS NULL OR TRIM(telefone) = '' THEN NULL
+    ELSE TO_HEX(SHA256(REGEXP_REPLACE(telefone, r'[^0-9]', '')))
+  END AS telefone_hash,
+  EXTRACT(YEAR FROM data_nascimento) AS ano_nascimento,
+  status_cliente,
+  criado_em,
+  atualizado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("clientes")}

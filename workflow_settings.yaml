@@ -1,0 +1,8 @@
+# Configuração padrão do Dataform para o ambiente dev.
+# Homologação e produção serão definidos posteriormente nas configurações
+# de compilação e execução, usando o mesmo código SQLX.
+
+defaultProject: botbrewpub-ghsurp
+defaultDataset: dev_silver
+defaultLocation: us-central1
+defaultAssertionDataset: dev_assertions

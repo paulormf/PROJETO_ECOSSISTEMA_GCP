@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gcp-data-platform"
+version = "0.1.0"
+description = "Plataforma de engenharia de dados com ingestão incremental em Python"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "google-cloud-bigquery>=3.30,<4",
+    "google-cloud-storage>=2.18,<3",
+    "pyarrow>=18,<23",
+    "python-dotenv>=1.0,<2",
+    "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
