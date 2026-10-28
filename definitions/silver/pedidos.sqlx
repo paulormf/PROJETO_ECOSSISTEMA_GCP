@@ -1,0 +1,27 @@
+config {
+  type: "table",
+  schema: "dev_silver",
+  name: "pedidos",
+  tags: ["silver", "fact-orders"],
+  assertions: {
+    uniqueKey: ["pedido_id"]
+  }
+}
+
+SELECT
+  pedido_id,
+  cliente_id,
+  endereco_cobranca_id,
+  endereco_entrega_id,
+  status_pedido,
+  canal_venda,
+  moeda,
+  subtotal,
+  desconto_total,
+  frete_total,
+  total_pedido,
+  realizado_em,
+  atualizado_em,
+  ingested_at AS source_ingested_at,
+  run_id AS source_run_id
+FROM ${ref("dev_bronze", "pedidos")}
