@@ -1,8 +1,13 @@
 config {
-  type: "table",
+  type: "incremental",
   schema: "dev_silver",
   name: "itens_pedido",
+  uniqueKey: ["item_pedido_id"],
   tags: ["silver", "fact-order-items"],
+  bigquery: {
+    partitionBy: "DATE(source_ingested_at)",
+    clusterBy: ["pedido_id", "variante_id"]
+  },
   assertions: {
     uniqueKey: ["item_pedido_id"]
   }
@@ -19,3 +24,11 @@ SELECT
   ingested_at AS source_ingested_at,
   run_id AS source_run_id
 FROM ${ref("dev_bronze", "itens_pedido")}
+${when(
+  incremental(),
+  `WHERE ingested_at >= (
+    SELECT COALESCE(MAX(source_ingested_at), TIMESTAMP("1970-01-01"))
+    FROM ${self()}
+  )`,
+  ""
+)}
