@@ -12,8 +12,8 @@ SELECT
   cliente_id,
   CASE
     WHEN nome_completo IS NULL OR TRIM(nome_completo) = '' THEN NULL
-    ELSE TO_HEX(SHA256(LOWER(TRIM(nome_completo))))
-  END AS nome_hash,
+    ELSE CONCAT(SUBSTR(TRIM(nome_completo), 1, 1), '***')
+  END AS nome_mascarado,
   CASE
     WHEN email IS NULL OR TRIM(email) = '' THEN NULL
     ELSE TO_HEX(SHA256(LOWER(TRIM(email))))
