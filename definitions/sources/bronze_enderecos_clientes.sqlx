@@ -1,0 +1,6 @@
+config {
+  type: "declaration",
+  database: "botbrewpub-ghsurp",
+  schema: "dev_bronze",
+  name: "enderecos_clientes"
+}
