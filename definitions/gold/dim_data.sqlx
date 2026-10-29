@@ -1,0 +1,82 @@
+config {
+  type: "table",
+  schema: `${dataform.projectConfig.vars.environment}_gold`,
+  name: "dim_data",
+  tags: ["gold", "dimension", "calendar"],
+  assertions: {
+    uniqueKey: ["data_sk"]
+  }
+}
+
+WITH limites AS (
+  SELECT
+    COALESCE(MIN(DATE(realizado_em)), DATE '1900-01-01') AS data_inicial,
+    COALESCE(MAX(DATE(realizado_em)), DATE '1900-01-01') AS data_final
+  FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "pedidos")}
+),
+calendario AS (
+  SELECT data
+  FROM limites,
+  UNNEST(GENERATE_DATE_ARRAY(data_inicial, data_final)) AS data
+),
+datas AS (
+  SELECT
+    CAST(FORMAT_DATE('%Y%m%d', data) AS INT64) AS data_sk,
+    data,
+    EXTRACT(YEAR FROM data) AS ano,
+    EXTRACT(QUARTER FROM data) AS trimestre,
+    EXTRACT(MONTH FROM data) AS mes,
+    EXTRACT(DAY FROM data) AS dia,
+    EXTRACT(ISOWEEK FROM data) AS semana_iso,
+    MOD(EXTRACT(DAYOFWEEK FROM data) + 5, 7) + 1 AS dia_semana_iso
+  FROM calendario
+)
+SELECT
+  data_sk,
+  data,
+  ano,
+  trimestre,
+  mes,
+  dia,
+  semana_iso,
+  dia_semana_iso,
+  CASE mes
+    WHEN 1 THEN "Janeiro"
+    WHEN 2 THEN "Fevereiro"
+    WHEN 3 THEN "Marco"
+    WHEN 4 THEN "Abril"
+    WHEN 5 THEN "Maio"
+    WHEN 6 THEN "Junho"
+    WHEN 7 THEN "Julho"
+    WHEN 8 THEN "Agosto"
+    WHEN 9 THEN "Setembro"
+    WHEN 10 THEN "Outubro"
+    WHEN 11 THEN "Novembro"
+    WHEN 12 THEN "Dezembro"
+  END AS nome_mes,
+  CASE dia_semana_iso
+    WHEN 1 THEN "Segunda-feira"
+    WHEN 2 THEN "Terca-feira"
+    WHEN 3 THEN "Quarta-feira"
+    WHEN 4 THEN "Quinta-feira"
+    WHEN 5 THEN "Sexta-feira"
+    WHEN 6 THEN "Sabado"
+    WHEN 7 THEN "Domingo"
+  END AS nome_dia_semana,
+  dia_semana_iso IN (6, 7) AS fim_de_semana
+FROM datas
+
+UNION ALL
+
+SELECT
+  0 AS data_sk,
+  CAST(NULL AS DATE) AS data,
+  CAST(NULL AS INT64) AS ano,
+  CAST(NULL AS INT64) AS trimestre,
+  CAST(NULL AS INT64) AS mes,
+  CAST(NULL AS INT64) AS dia,
+  CAST(NULL AS INT64) AS semana_iso,
+  CAST(NULL AS INT64) AS dia_semana_iso,
+  CAST(NULL AS STRING) AS nome_mes,
+  CAST(NULL AS STRING) AS nome_dia_semana,
+  CAST(NULL AS BOOL) AS fim_de_semana

@@ -1,0 +1,30 @@
+config {
+  type: "table",
+  schema: `${dataform.projectConfig.vars.environment}_gold`,
+  name: "dim_categorias",
+  tags: ["gold", "dimension", "scd1", "product-catalog"],
+  assertions: {
+    uniqueKey: ["categoria_id"]
+  }
+}
+
+SELECT
+  TO_HEX(SHA256(CONCAT("categoria|", CAST(categoria_id AS STRING)))) AS categoria_sk,
+  categoria_id,
+  categoria_pai_id,
+  nome_categoria,
+  criado_em AS categoria_criada_em,
+  source_ingested_at,
+  source_run_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "categorias")}
+
+UNION ALL
+
+SELECT
+  TO_HEX(SHA256("unknown|categoria")) AS categoria_sk,
+  CAST(NULL AS INT64) AS categoria_id,
+  CAST(NULL AS INT64) AS categoria_pai_id,
+  "DESCONHECIDA" AS nome_categoria,
+  CAST(NULL AS TIMESTAMP) AS categoria_criada_em,
+  CAST(NULL AS TIMESTAMP) AS source_ingested_at,
+  CAST(NULL AS STRING) AS source_run_id

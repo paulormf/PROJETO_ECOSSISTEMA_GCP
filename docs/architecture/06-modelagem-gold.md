@@ -41,8 +41,9 @@ posteriormente sem criar uma nova fato.
 - A Gold utilizara chaves substitutas e atributos analiticos nao identificaveis.
 - Campos mascarados ou hash somente serao publicados com requisito de negocio
   aprovado e controle de acesso especifico.
-- `dim_data` sera gerada no Dataform para um intervalo controlado, inicialmente
-  de 2020 ate cinco anos apos a data corrente.
+- `dim_data` sera gerada no Dataform entre a menor e a maior data valida de
+  `silver.pedidos`. Caso a origem esteja vazia, sera usado `1900-01-01` como
+  inicio e fim do calendario.
 - Registros sem correspondencia receberao uma chave desconhecida reservada,
   por exemplo `data_sk = 0`.
 

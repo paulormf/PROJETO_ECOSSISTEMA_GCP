@@ -1,0 +1,49 @@
+config {
+  type: "table",
+  schema: `${dataform.projectConfig.vars.environment}_gold`,
+  name: "dim_variantes_produtos",
+  tags: ["gold", "dimension", "scd1", "product-catalog"],
+  assertions: {
+    uniqueKey: ["variante_id"]
+  }
+}
+
+SELECT
+  TO_HEX(SHA256(CONCAT("variante|", CAST(v.variante_id AS STRING)))) AS variante_sk,
+  v.variante_id,
+  v.produto_id,
+  COALESCE(
+    p.produto_sk,
+    TO_HEX(SHA256("unknown|produto"))
+  ) AS produto_sk,
+  v.sku,
+  v.nome_variante,
+  v.preco_custo,
+  v.preco_venda,
+  v.peso_gramas,
+  v.ativo,
+  v.criado_em AS variante_criada_em,
+  v.atualizado_em AS variante_atualizada_em,
+  v.source_ingested_at,
+  v.source_run_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "variantes_produtos")} AS v
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_produtos")} AS p
+  ON v.produto_id = p.produto_id
+
+UNION ALL
+
+SELECT
+  TO_HEX(SHA256("unknown|variante")) AS variante_sk,
+  CAST(NULL AS INT64) AS variante_id,
+  CAST(NULL AS INT64) AS produto_id,
+  TO_HEX(SHA256("unknown|produto")) AS produto_sk,
+  "DESCONHECIDO" AS sku,
+  "DESCONHECIDA" AS nome_variante,
+  CAST(NULL AS NUMERIC) AS preco_custo,
+  CAST(NULL AS NUMERIC) AS preco_venda,
+  CAST(NULL AS INT64) AS peso_gramas,
+  FALSE AS ativo,
+  CAST(NULL AS TIMESTAMP) AS variante_criada_em,
+  CAST(NULL AS TIMESTAMP) AS variante_atualizada_em,
+  CAST(NULL AS TIMESTAMP) AS source_ingested_at,
+  CAST(NULL AS STRING) AS source_run_id

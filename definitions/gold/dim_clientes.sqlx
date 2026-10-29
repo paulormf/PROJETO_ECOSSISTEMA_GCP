@@ -1,0 +1,30 @@
+config {
+  type: "table",
+  schema: `${dataform.projectConfig.vars.environment}_gold`,
+  name: "dim_clientes",
+  tags: ["gold", "dimension", "scd1"],
+  assertions: {
+    uniqueKey: ["cliente_id"]
+  }
+}
+
+SELECT
+  TO_HEX(SHA256(CONCAT("cliente|", CAST(cliente_id AS STRING)))) AS cliente_sk,
+  cliente_id,
+  status_cliente,
+  criado_em AS cliente_criado_em,
+  atualizado_em AS cliente_atualizado_em,
+  source_ingested_at,
+  source_run_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "clientes")}
+
+UNION ALL
+
+SELECT
+  TO_HEX(SHA256("unknown|cliente")) AS cliente_sk,
+  CAST(NULL AS INT64) AS cliente_id,
+  "DESCONHECIDO" AS status_cliente,
+  CAST(NULL AS TIMESTAMP) AS cliente_criado_em,
+  CAST(NULL AS TIMESTAMP) AS cliente_atualizado_em,
+  CAST(NULL AS TIMESTAMP) AS source_ingested_at,
+  CAST(NULL AS STRING) AS source_run_id

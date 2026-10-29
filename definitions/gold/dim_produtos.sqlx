@@ -1,0 +1,45 @@
+config {
+  type: "table",
+  schema: `${dataform.projectConfig.vars.environment}_gold`,
+  name: "dim_produtos",
+  tags: ["gold", "dimension", "scd1", "product-catalog"],
+  assertions: {
+    uniqueKey: ["produto_id"]
+  }
+}
+
+SELECT
+  TO_HEX(SHA256(CONCAT("produto|", CAST(p.produto_id AS STRING)))) AS produto_sk,
+  p.produto_id,
+  p.marca_id,
+  p.categoria_id,
+  COALESCE(
+    c.categoria_sk,
+    TO_HEX(SHA256("unknown|categoria"))
+  ) AS categoria_sk,
+  p.nome_produto,
+  p.descricao,
+  p.status_produto,
+  p.criado_em AS produto_criado_em,
+  p.atualizado_em AS produto_atualizado_em,
+  p.source_ingested_at,
+  p.source_run_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "produtos")} AS p
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_categorias")} AS c
+  ON p.categoria_id = c.categoria_id
+
+UNION ALL
+
+SELECT
+  TO_HEX(SHA256("unknown|produto")) AS produto_sk,
+  CAST(NULL AS INT64) AS produto_id,
+  CAST(NULL AS INT64) AS marca_id,
+  CAST(NULL AS INT64) AS categoria_id,
+  TO_HEX(SHA256("unknown|categoria")) AS categoria_sk,
+  "DESCONHECIDO" AS nome_produto,
+  CAST(NULL AS STRING) AS descricao,
+  "DESCONHECIDO" AS status_produto,
+  CAST(NULL AS TIMESTAMP) AS produto_criado_em,
+  CAST(NULL AS TIMESTAMP) AS produto_atualizado_em,
+  CAST(NULL AS TIMESTAMP) AS source_ingested_at,
+  CAST(NULL AS STRING) AS source_run_id

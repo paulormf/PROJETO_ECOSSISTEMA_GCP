@@ -1,0 +1,59 @@
+config {
+  type: "incremental",
+  schema: `${dataform.projectConfig.vars.environment}_gold`,
+  name: "fato_itens_pedido",
+  uniqueKey: ["item_pedido_id"],
+  tags: ["gold", "fact", "order-items"],
+  bigquery: {
+    partitionBy: "DATE(realizado_em)",
+    clusterBy: ["pedido_id", "variante_sk"]
+  },
+  assertions: {
+    uniqueKey: ["item_pedido_id"]
+  }
+}
+
+WITH base AS (
+  SELECT
+    i.item_pedido_id,
+    i.pedido_id,
+    COALESCE(c.cliente_sk, TO_HEX(SHA256("unknown|cliente"))) AS cliente_sk,
+    COALESCE(v.variante_sk, TO_HEX(SHA256("unknown|variante"))) AS variante_sk,
+    COALESCE(v.produto_sk, TO_HEX(SHA256("unknown|produto"))) AS produto_sk,
+    COALESCE(p.categoria_sk, TO_HEX(SHA256("unknown|categoria"))) AS categoria_sk,
+    COALESCE(d.data_sk, 0) AS data_sk,
+    o.realizado_em,
+    o.status_pedido,
+    o.canal_venda,
+    o.moeda,
+    i.quantidade,
+    i.preco_unitario,
+    i.desconto_total,
+    i.total_item,
+    GREATEST(
+      COALESCE(i.source_ingested_at, TIMESTAMP("1970-01-01")),
+      COALESCE(o.source_ingested_at, TIMESTAMP("1970-01-01"))
+    ) AS source_ingested_at,
+    i.source_run_id
+  FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "itens_pedido")} AS i
+  LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_silver", "pedidos")} AS o
+    ON i.pedido_id = o.pedido_id
+  LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_clientes")} AS c
+    ON o.cliente_id = c.cliente_id
+  LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_variantes_produtos")} AS v
+    ON i.variante_id = v.variante_id
+  LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_produtos")} AS p
+    ON v.produto_id = p.produto_id
+  LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_data")} AS d
+    ON DATE(o.realizado_em) = d.data
+)
+SELECT *
+FROM base
+${when(
+  incremental(),
+  `WHERE source_ingested_at >= (
+    SELECT COALESCE(MAX(source_ingested_at), TIMESTAMP("1970-01-01"))
+    FROM ${self()}
+  )`,
+  ""
+)}
