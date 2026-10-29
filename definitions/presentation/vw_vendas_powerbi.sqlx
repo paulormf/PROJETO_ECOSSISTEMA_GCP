@@ -1,0 +1,53 @@
+config {
+  type: "view",
+  schema: `${dataform.projectConfig.vars.environment}_presentation`,
+  name: "vw_vendas_powerbi",
+  tags: ["presentation", "powerbi", "sales"]
+}
+
+SELECT
+  f.item_pedido_id,
+  f.pedido_id,
+  f.cliente_sk,
+  c.status_cliente,
+  f.variante_sk,
+  v.variante_id,
+  v.sku,
+  v.nome_variante,
+  f.produto_sk,
+  p.produto_id,
+  p.nome_produto,
+  f.categoria_sk,
+  cat.categoria_id,
+  cat.nome_categoria,
+  f.data_sk,
+  d.data AS data_venda,
+  d.ano,
+  d.trimestre,
+  d.mes,
+  d.nome_mes,
+  d.dia,
+  d.semana_iso,
+  d.nome_dia_semana,
+  d.fim_de_semana,
+  f.realizado_em,
+  f.status_pedido,
+  f.canal_venda,
+  f.moeda,
+  f.quantidade,
+  f.preco_unitario,
+  f.desconto_total,
+  f.total_item,
+  f.source_ingested_at,
+  f.source_run_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_gold", "fato_itens_pedido")} AS f
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_clientes")} AS c
+  ON f.cliente_sk = c.cliente_sk
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_variantes_produtos")} AS v
+  ON f.variante_sk = v.variante_sk
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_produtos")} AS p
+  ON f.produto_sk = p.produto_sk
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_categorias")} AS cat
+  ON f.categoria_sk = cat.categoria_sk
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_gold", "dim_data")} AS d
+  ON f.data_sk = d.data_sk
