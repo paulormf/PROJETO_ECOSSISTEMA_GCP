@@ -1,6 +1,6 @@
 config {
   type: "incremental",
-  schema: "dev_silver",
+  schema: `${dataform.projectConfig.vars.environment}_silver`,
   name: "pagamentos",
   uniqueKey: ["pagamento_id"],
   tags: ["silver", "fact-payments"],
@@ -28,7 +28,7 @@ SELECT
   criado_em,
   ingested_at AS source_ingested_at,
   run_id AS source_run_id
-FROM ${ref("dev_bronze", "pagamentos")}
+FROM ${ref(dataform.projectConfig.vars.environment + "_bronze", "pagamentos")}
 ${when(
   incremental(),
   `WHERE ingested_at >= (
