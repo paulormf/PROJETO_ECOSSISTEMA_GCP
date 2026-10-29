@@ -19,6 +19,23 @@ Este documento será preenchido antes da implementação do extrator Python. Nen
 | CDC nativo utilizado nesta fase | Não |
 | Estratégia incremental | Watermark |
 
+## Decisao vigente sobre enderecos
+
+O cadastro de um novo endereco gera um novo `endereco_id`. A alteracao de um
+endereco existente mantem o mesmo `endereco_id`.
+
+Consequentemente:
+
+- `INSERT` representa um novo endereco;
+- `UPDATE` representa uma nova versao do mesmo endereco no change log;
+- `old_row` e `new_row` preservam o historico da alteracao;
+- a Bronze mantem a situacao operacional atual;
+- uma futura dimensao SCD Tipo 2 podera reconstruir as versoes historicas a
+  partir de `change_id` e `occurred_at`.
+
+Essa regra nao altera o primeiro escopo da Gold, que nao inclui uma dimensao de
+enderecos nem uma fato adicional.
+
 ## Tabelas selecionadas
 
 Preencher uma linha por tabela candidata à ingestão.

@@ -1,10 +1,11 @@
-# Orquestração da plataforma
+# Orquestracao da plataforma
 
 ## Objetivo
 
-Executar a carga horária de forma controlada, idempotente e observável, separando a ingestão Python das transformações Dataform.
+Executar a carga horaria de forma controlada, idempotente e observavel,
+separando a ingestao Python das transformacoes Dataform.
 
-## Fluxo de execução
+## Fluxo alvo
 
 ```text
 Cloud Scheduler
@@ -13,85 +14,114 @@ Cloud Scheduler
 Workflows
         |
         v
-Cloud Run Job - ingestão Python
+Cloud Run Job - ingestao Python
         |
         +--> PostgreSQL: change log
-        +--> GCS: landing Parquet
-        +--> BigQuery: Bronze incremental
+        +--> GCS: Landing Parquet
+        +--> BigQuery: Bronze
         |
         v
 Dataform Workflow Invocation
         |
         +--> Silver
+        +--> Gold
         +--> Assertions
         |
         v
-Registro de logs e métricas
+Cloud Logging e metricas
 ```
 
 ## Responsabilidade dos componentes
 
 ### Cloud Scheduler
 
-Dispara o workflow uma vez por hora. O agendamento não acessa diretamente o PostgreSQL nem o BigQuery.
+Dispara o Workflow uma vez por hora. O agendamento nao acessa diretamente o
+PostgreSQL nem executa SQL de transformacao.
 
 ### Workflows
 
-Controla a sequência, timeout, retries e tratamento de falhas:
+Controla a sequencia, timeout, retries e tratamento de falhas:
 
-1. Inicia o Cloud Run Job de ingestão.
-2. Aguarda a conclusão do job.
-3. Interrompe o fluxo se a ingestão falhar.
-4. Inicia a execução do Dataform.
-5. Registra o resultado final.
+1. Inicia o Cloud Run Job de ingestao.
+2. Aguarda a conclusao do job.
+3. Interrompe o fluxo se a ingestao falhar.
+4. Inicia a execucao Dataform do ambiente correspondente.
+5. Aguarda Silver, Gold e assertions.
+6. Registra o resultado final.
 
 ### Cloud Run Job
 
-Executa o código Python com `python -m`, sem console scripts ou arquivos `.exe`. O job executa:
+Executa o Python com `python -m`, sem console scripts ou arquivos `.exe`:
 
-1. Leitura do change log PostgreSQL.
-2. Escrita dos arquivos Parquet na landing do GCS.
-3. Carga idempotente na tabela técnica de eventos Bronze.
-4. Aplicação das alterações nas tabelas Bronze.
-5. Atualização dos checkpoints.
+1. Le o change log PostgreSQL.
+2. Escreve Parquet na Landing.
+3. Carrega os eventos na tabela tecnica Bronze.
+4. Aplica os eventos nas tabelas Bronze de origem.
+5. Atualiza os checkpoints somente apos sucesso.
+
+O full load e executado separadamente do job incremental, com controle de carga
+logica, tentativas e manifest de arquivos.
 
 ### Dataform
 
-Executa os modelos Silver e as assertions somente depois da ingestão Bronze concluir com sucesso.
-
-## Segurança
-
-- A senha do PostgreSQL ficará no Secret Manager.
-- O Cloud Run usará uma conta de serviço própria.
-- O Dataform continuará usando a conta `sa-dataform-dev` no ambiente dev.
-- Cada ambiente deverá possuir datasets e permissões separados.
-- Nenhum segredo será armazenado no GitHub ou no código-fonte.
+Executa os modelos Silver, Gold e assertions somente depois que a ingestao
+Bronze concluir com sucesso. A configuracao do ambiente direciona as acoes
+para os datasets correspondentes.
 
 ## Ambientes
 
-O fluxo usará o mesmo código, com o ambiente informado por configuração:
+O mesmo codigo sera promovido por configuracao:
 
 ```text
-dev  -> dev_control, dev_bronze, dev_silver, dev_gold
-hom  -> hom_control, hom_bronze, hom_silver, hom_gold
-prod -> prod_control, prod_bronze, prod_silver, prod_gold
+dev  -> dev_control, dev_bronze, dev_silver, dev_gold, dev_assertions
+hom  -> hom_control, hom_bronze, hom_silver, hom_gold, hom_assertions
+prod -> prod_control, prod_bronze, prod_silver, prod_gold, prod_assertions
 ```
 
-## Estratégia de falhas
+O ambiente deve ser definido de forma explicita no Cloud Run Job e na release
+configuration do Dataform. Uma execucao nunca deve depender do ambiente default
+do container ou do workspace local.
 
-- Falha na ingestão: o Dataform não é executado.
-- Falha no Dataform: o próximo ciclo reprocessa a partir do checkpoint confirmado.
-- Retry do workflow: operações de ingestão e merge devem permanecer idempotentes.
-- Falha após escrita parcial: o checkpoint só é confirmado após a etapa correspondente concluir.
+## Seguranca
 
-## Ordem de implementação
+- A URL do PostgreSQL fica no Secret Manager.
+- Cada Cloud Run Job usa uma conta de servico propria por ambiente.
+- A conta do Dataform possui apenas as permissoes necessarias no ambiente alvo.
+- Buckets e datasets possuem permissoes separadas por ambiente e funcao.
+- Nenhum segredo fica no GitHub ou no codigo-fonte.
+- Cloud Logging registra execucoes, falhas e identificadores de correlacao.
 
-1. Containerização do módulo Python.
-2. Execução local equivalente ao Cloud Run Job.
-3. Conta de serviço e Secret Manager.
-4. Cloud Run Job no ambiente dev.
-5. Workflow manual no ambiente dev.
-6. Invocação do Dataform pelo Workflow.
-7. Cloud Scheduler horário.
-8. GitHub Actions para build e deploy.
-9. Configuração de homologação e produção.
+## Estrategia de falhas
+
+- Falha na ingestao: Dataform nao e executado.
+- Falha no Dataform: o checkpoint da ingestao nao e retrocedido; o proximo ciclo
+  deve reprocessar de forma idempotente conforme o estado confirmado.
+- Retry do Workflow: cargas e merges devem permanecer idempotentes.
+- Falha apos escrita parcial: arquivos publicados permanecem no GCS e o estado
+  da execucao deve indicar quais foram validados.
+- Falha de assertion: a execucao deve ser marcada como falha de qualidade, sem
+  promover o resultado para o proximo ambiente.
+
+## Observabilidade minima
+
+Cada execucao deve permitir localizar:
+
+- ambiente;
+- nome da etapa;
+- `logical_load_id` ou `run_id`;
+- checkpoint inicial e final;
+- quantidade de eventos e linhas;
+- status;
+- mensagem de erro;
+- links para logs e jobs do BigQuery/Dataform.
+
+## Ordem de implementacao
+
+1. Validar o fluxo local equivalente aos Cloud Run Jobs.
+2. Manter Cloud Run Jobs e Secret Manager operacionais no ambiente dev.
+3. Finalizar a invocacao do Dataform pelo Workflow.
+4. Criar o agendamento horario no Cloud Scheduler.
+5. Automatizar build e deploy com GitHub Actions.
+6. Promover e validar o ambiente hom.
+7. Promover para prod somente apos revisar seguranca, retencao, custos e
+   monitoramento.
