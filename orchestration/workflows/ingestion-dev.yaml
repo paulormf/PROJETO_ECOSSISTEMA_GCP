@@ -1,0 +1,34 @@
+main:
+  steps:
+    - initialize:
+        assign:
+          - project_id: "botbrewpub-ghsurp"
+          - location: "us-central1"
+          - repository: "projects/botbrewpub-ghsurp/locations/us-central1/repositories/ecommerce-dataform"
+          - ingestion_job: "ingestion-dev"
+          - dataform_workflow_config: "projects/botbrewpub-ghsurp/locations/us-central1/repositories/ecommerce-dataform/workflowConfigs/wf-dev"
+
+    - run_ingestion:
+        call: googleapis.run.v1.namespaces.jobs.run
+        args:
+          name: ${"namespaces/" + project_id + "/jobs/" + ingestion_job}
+          location: ${location}
+          body: {}
+          connector_params:
+            timeout: 3600
+        result: ingestion_execution
+
+    - run_dataform:
+        call: http.post
+        args:
+          url: ${"https://dataform.googleapis.com/v1/" + repository + "/workflowInvocations"}
+          auth:
+            type: OAuth2
+          body:
+            workflowConfig: ${dataform_workflow_config}
+        result: dataform_invocation
+
+    - finish:
+        return:
+          ingestion: ${ingestion_execution}
+          dataform: ${dataform_invocation.body}
