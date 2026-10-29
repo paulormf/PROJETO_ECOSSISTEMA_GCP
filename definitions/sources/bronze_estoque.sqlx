@@ -1,6 +1,6 @@
 config {
   type: "declaration",
   database: "botbrewpub-ghsurp",
-  schema: "dev_bronze",
+  schema: `${dataform.projectConfig.vars.environment}_bronze`,
   name: "estoque"
 }
