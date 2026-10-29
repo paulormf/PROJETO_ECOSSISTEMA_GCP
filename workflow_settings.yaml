@@ -6,3 +6,5 @@ defaultProject: botbrewpub-ghsurp
 defaultDataset: dev_silver
 defaultLocation: us-central1
 defaultAssertionDataset: dev_assertions
+vars:
+  environment: dev
