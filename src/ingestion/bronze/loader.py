@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 import re
+from collections.abc import Sequence
 
 from google.cloud import bigquery
+from google.api_core.exceptions import NotFound
 
 
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -23,6 +25,7 @@ def load_parquet_run(
     *,
     bucket_name: str,
     object_prefix: str,
+    source_uris: Sequence[str] | None = None,
     destination_project: str,
     destination_dataset: str,
     source_table: str,
@@ -47,13 +50,26 @@ def load_parquet_run(
         _validate_identifier(field, "clustering_field")
     if not bucket_name.strip():
         raise ValueError("bucket_name não pode ser vazio")
-    if not object_prefix.strip():
+    if source_uris is None and not object_prefix.strip():
         raise ValueError("object_prefix não pode ser vazio")
 
     destination_table = (
         f"{destination_project}.{destination_dataset}.{source_table}"
     )
-    source_uri = f"gs://{bucket_name}/{object_prefix.rstrip('/')}/part-*.parquet"
+    if source_uris is None:
+        source_uri: str | list[str] = (
+            f"gs://{bucket_name}/{object_prefix.rstrip('/')}/part-*.parquet"
+        )
+    else:
+        if not source_uris:
+            raise ValueError("source_uris deve conter ao menos um objeto")
+        source_uri = list(source_uris)
+    destination_exists = True
+    try:
+        client.get_table(destination_table)
+    except NotFound:
+        destination_exists = False
+
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.PARQUET,
         create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
@@ -61,12 +77,12 @@ def load_parquet_run(
         autodetect=True,
         ignore_unknown_values=False,
     )
-    if partition_field is not None:
+    if not destination_exists and partition_field is not None:
         job_config.time_partitioning = bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.DAY,
             field=partition_field,
         )
-    if clustering_fields:
+    if not destination_exists and clustering_fields:
         job_config.clustering_fields = list(clustering_fields)
     load_job = client.load_table_from_uri(
         source_uri,

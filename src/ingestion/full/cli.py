@@ -8,7 +8,7 @@ import psycopg
 from dotenv import load_dotenv
 from google.cloud import bigquery, storage
 
-from ingestion.full.checkpoint_store import BigQueryFullLoadCheckpointStore
+from ingestion.full.load_control_store import BigQueryFullLoadControlStore
 from ingestion.full.pipeline import run_selected_full_tables_to_bronze
 
 
@@ -31,9 +31,9 @@ def main() -> None:
 
     bigquery_client = bigquery.Client(project=project_id, location=location)
     storage_client = storage.Client(project=project_id)
-    checkpoint_store = BigQueryFullLoadCheckpointStore(
+    control_store = BigQueryFullLoadControlStore(
         bigquery_client,
-        f"{project_id}.{control_dataset}.full_load_checkpoints",
+        f"{project_id}.{control_dataset}",
     )
 
     with psycopg.connect(database_url) as connection:
@@ -41,7 +41,7 @@ def main() -> None:
             connection,
             storage_client,
             bigquery_client,
-            checkpoint_store,
+            control_store,
             bucket_name=bucket_name,
             source_schema=source_schema,
             include_tables=args.tables,
@@ -56,7 +56,8 @@ def main() -> None:
             json.dumps(
                 {
                     "source_table": result.extraction.source_table,
-                    "run_id": result.extraction.run_id,
+                    "logical_load_id": result.extraction.logical_load_id,
+                    "attempt_id": result.extraction.attempt_id,
                     "rows_extracted": result.extraction.rows_extracted,
                     "files_created": result.extraction.files_created,
                     "status": result.extraction.status,

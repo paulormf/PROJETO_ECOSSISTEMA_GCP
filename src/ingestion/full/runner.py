@@ -9,9 +9,10 @@ from uuid import uuid4
 from google.cloud import storage
 from psycopg import Connection
 
-from ingestion.full.checkpoint_store import (
-    BigQueryFullLoadCheckpointStore,
-    FullLoadCheckpoint,
+from ingestion.full.load_control_store import (
+    BigQueryFullLoadControlStore,
+    FullLoadFile,
+    FullLoadRun,
 )
 from ingestion.full.reader import TableSpec, read_table_batches
 from ingestion.landing.parquet_writer import write_full_batch
@@ -22,7 +23,8 @@ class FullLoadResult:
     """Resumo da execução do full de uma tabela."""
 
     source_table: str
-    run_id: str
+    logical_load_id: str
+    attempt_id: str
     rows_extracted: int
     files_created: int
     status: str
@@ -31,7 +33,7 @@ class FullLoadResult:
 def run_full_table(
     connection: Connection,
     storage_client: storage.Client,
-    checkpoint_store: BigQueryFullLoadCheckpointStore,
+    control_store: BigQueryFullLoadControlStore,
     table: TableSpec,
     *,
     bucket_name: str,
@@ -39,10 +41,10 @@ def run_full_table(
     source_system: str = "postgresql",
     batch_size: int = 50_000,
 ) -> FullLoadResult:
-    """Executa ou retoma o full de uma tabela e atualiza seu checkpoint."""
+    """Executa ou retoma o full de uma tabela e registra seus arquivos."""
 
     table.validate()
-    existing = checkpoint_store.get(
+    existing = control_store.get_latest_run(
         pipeline_name=pipeline_name,
         source_system=source_system,
         source_schema=table.source_schema,
@@ -51,37 +53,39 @@ def run_full_table(
     if existing is not None and existing.status == "COMPLETED":
         return FullLoadResult(
             source_table=table.source_table,
-            run_id=existing.run_id,
-            rows_extracted=existing.rows_extracted,
-            files_created=existing.files_created,
+            logical_load_id=existing.logical_load_id,
+            attempt_id="",
+            rows_extracted=existing.extracted_rows,
+            files_created=existing.extracted_files,
             status=existing.status,
         )
 
     start_after = _decode_last_key(existing, table)
-    run_id = str(uuid4())
-    started_at = datetime.now(timezone.utc)
-    snapshot_at = started_at
-    rows_extracted = existing.rows_extracted if existing is not None else 0
-    files_created = existing.files_created if existing is not None else 0
-    checkpoint = FullLoadCheckpoint(
+    logical_load_id = existing.logical_load_id if existing is not None else str(uuid4())
+    attempt_id = str(uuid4())
+    started_at = existing.started_at if existing is not None else datetime.now(timezone.utc)
+    snapshot_at = existing.snapshot_at if existing is not None else started_at
+    rows_extracted = existing.extracted_rows if existing is not None else 0
+    files_created = existing.extracted_files if existing is not None else 0
+    run = FullLoadRun(
+        logical_load_id=logical_load_id,
         pipeline_name=pipeline_name,
         source_system=source_system,
         source_schema=table.source_schema,
         source_table=table.source_table,
-        run_id=run_id,
         snapshot_at=snapshot_at,
-        last_primary_key_json=existing.last_primary_key_json
-        if existing is not None
-        else None,
-        rows_extracted=rows_extracted,
-        files_created=files_created,
+        last_primary_key_json=existing.last_primary_key_json if existing is not None else None,
         status="RUNNING",
+        expected_rows=None,
+        expected_files=None,
+        extracted_rows=rows_extracted,
+        extracted_files=files_created,
         started_at=started_at,
         completed_at=None,
         error_message=None,
         updated_at=started_at,
     )
-    checkpoint_store.save(checkpoint)
+    control_store.save_run(run)
 
     try:
         for rows in read_table_batches(
@@ -92,7 +96,7 @@ def run_full_table(
         ):
             object_name = _object_name(
                 table=table,
-                run_id=run_id,
+                run_id=attempt_id,
                 part_number=files_created,
             )
             write_full_batch(
@@ -102,7 +106,7 @@ def run_full_table(
                 rows=rows,
                 source_schema=table.source_schema,
                 source_table=table.source_table,
-                run_id=run_id,
+                run_id=attempt_id,
                 snapshot_at=snapshot_at,
                 ingested_at=datetime.now(timezone.utc),
             )
@@ -110,35 +114,50 @@ def run_full_table(
             rows_extracted += len(rows)
             files_created += 1
             last_key = tuple(rows[-1][column] for column in table.primary_key)
-            checkpoint = replace(
-                checkpoint,
-                last_primary_key_json=json.dumps(last_key, default=str),
-                rows_extracted=rows_extracted,
-                files_created=files_created,
-                updated_at=datetime.now(timezone.utc),
+            updated_at = datetime.now(timezone.utc)
+            control_store.save_file(
+                FullLoadFile(
+                    logical_load_id=logical_load_id,
+                    attempt_id=attempt_id,
+                    source_system=source_system,
+                    source_schema=table.source_schema,
+                    source_table=table.source_table,
+                    object_name=object_name,
+                    row_count=len(rows),
+                    status="EXTRACTED",
+                    created_at=updated_at,
+                )
             )
-            checkpoint_store.save(checkpoint)
+            run = replace(
+                run,
+                last_primary_key_json=json.dumps(last_key, default=str),
+                extracted_rows=rows_extracted,
+                extracted_files=files_created,
+                updated_at=updated_at,
+            )
+            control_store.save_run(run)
 
-        checkpoint = replace(
-            checkpoint,
+        run = replace(
+            run,
             status="COMPLETED",
             completed_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
-        checkpoint_store.save(checkpoint)
+        control_store.save_run(run)
     except Exception as error:
-        checkpoint = replace(
-            checkpoint,
+        run = replace(
+            run,
             status="FAILED",
             error_message=str(error)[:4_000],
             updated_at=datetime.now(timezone.utc),
         )
-        checkpoint_store.save(checkpoint)
+        control_store.save_run(run)
         raise
 
     return FullLoadResult(
         source_table=table.source_table,
-        run_id=run_id,
+        logical_load_id=logical_load_id,
+        attempt_id=attempt_id,
         rows_extracted=rows_extracted,
         files_created=files_created,
         status="COMPLETED",
@@ -146,7 +165,7 @@ def run_full_table(
 
 
 def _decode_last_key(
-    checkpoint: FullLoadCheckpoint | None,
+    checkpoint: FullLoadRun | None,
     table: TableSpec,
 ) -> tuple[Any, ...] | None:
     if checkpoint is None or checkpoint.last_primary_key_json is None:

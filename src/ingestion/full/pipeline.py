@@ -9,7 +9,7 @@ from psycopg import Connection
 
 from ingestion.bronze.loader import LoadResult, load_parquet_run
 from ingestion.bronze.policy import BronzeTablePolicy, get_bronze_policy
-from ingestion.full.checkpoint_store import BigQueryFullLoadCheckpointStore
+from ingestion.full.load_control_store import BigQueryFullLoadControlStore
 from ingestion.full.runner import FullLoadResult, run_full_table
 from ingestion.source.catalog import discover_table_specs
 
@@ -26,7 +26,7 @@ class BronzeRunResult:
 def run_selected_full_tables(
     connection: Connection,
     storage_client: storage.Client,
-    checkpoint_store: BigQueryFullLoadCheckpointStore,
+    control_store: BigQueryFullLoadControlStore,
     *,
     bucket_name: str,
     source_schema: str,
@@ -48,7 +48,7 @@ def run_selected_full_tables(
         run_full_table(
             connection,
             storage_client,
-            checkpoint_store,
+            control_store,
             table,
             bucket_name=bucket_name,
             batch_size=batch_size,
@@ -61,7 +61,7 @@ def run_selected_full_tables_to_bronze(
     connection: Connection,
     storage_client: storage.Client,
     bigquery_client: bigquery.Client,
-    checkpoint_store: BigQueryFullLoadCheckpointStore,
+    control_store: BigQueryFullLoadControlStore,
     *,
     bucket_name: str,
     source_schema: str,
@@ -89,23 +89,23 @@ def run_selected_full_tables_to_bronze(
         extraction = run_full_table(
             connection,
             storage_client,
-            checkpoint_store,
+            control_store,
             table,
             bucket_name=bucket_name,
             batch_size=batch_size,
         )
-        object_prefix = _find_run_prefix(
-            storage_client,
-            bucket_name=bucket_name,
-            source_schema=source_schema,
-            source_table=table.source_table,
-            run_id=extraction.run_id,
+        object_names = control_store.list_extracted_files(
+            extraction.logical_load_id
+        )
+        source_uris = tuple(
+            f"gs://{bucket_name}/{object_name}" for object_name in object_names
         )
         policy = policies[table.source_table]
         load = load_parquet_run(
             bigquery_client,
             bucket_name=bucket_name,
-            object_prefix=object_prefix,
+            object_prefix="manifest",
+            source_uris=source_uris,
             destination_project=destination_project,
             destination_dataset=destination_dataset,
             source_table=table.source_table,
@@ -113,6 +113,7 @@ def run_selected_full_tables_to_bronze(
             partition_field=policy.partition_field,
             clustering_fields=policy.clustering_fields,
         )
+        control_store.mark_files_loaded(extraction.logical_load_id)
         results.append(
             BronzeRunResult(
                 extraction=extraction,
@@ -124,29 +125,3 @@ def run_selected_full_tables_to_bronze(
     return tuple(results)
 
 
-def _find_run_prefix(
-    storage_client: storage.Client,
-    *,
-    bucket_name: str,
-    source_schema: str,
-    source_table: str,
-    run_id: str,
-) -> str:
-    """Localiza o prefixo efetivamente criado para um run no GCS."""
-
-    base_prefix = (
-        f"source=postgresql/schema={source_schema}/"
-        f"table={source_table}/load_type=full/"
-    )
-    run_marker = f"run_id={run_id}/"
-    prefixes = {
-        blob.name.rsplit("/part-", 1)[0]
-        for blob in storage_client.list_blobs(bucket_name, prefix=base_prefix)
-        if run_marker in blob.name
-    }
-    if len(prefixes) != 1:
-        raise RuntimeError(
-            f"Esperado um único prefixo para o run {run_id}, "
-            f"encontrados: {sorted(prefixes)}"
-        )
-    return next(iter(prefixes))
