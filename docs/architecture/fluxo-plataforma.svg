@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">Fluxo da plataforma de dados GCP</title>
+  <desc id="desc">Fluxo desde PostgreSQL até a camada de apresentação consumida pelo Power BI, com orquestração por Cloud Scheduler e Workflows.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" x2="1">
+      <stop offset="0" stop-color="#1a73e8"/>
+      <stop offset="1" stop-color="#34a853"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#1f2937" flood-opacity=".18"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#5f6368"/>
+    </marker>
+    <style>
+      .title { font: 700 30px Arial, sans-serif; fill: #fff; }
+      .subtitle { font: 400 15px Arial, sans-serif; fill: #e8f0fe; }
+      .box-title { font: 700 19px Arial, sans-serif; fill: #202124; }
+      .box-text { font: 400 14px Arial, sans-serif; fill: #5f6368; }
+      .small { font: 600 13px Arial, sans-serif; fill: #5f6368; }
+      .arrow { stroke: #5f6368; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 9 7; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="760" fill="#f8fafd"/>
+  <rect x="30" y="25" width="1340" height="100" rx="18" fill="url(#header)"/>
+  <text x="70" y="70" class="title">Plataforma de Dados GCP</text>
+  <text x="70" y="98" class="subtitle">Ingestão incremental e full • Medallion Architecture • Ambientes dev / hom / prod</text>
+
+  <text x="70" y="165" class="small">ORIGEM E INGESTÃO</text>
+  <text x="520" y="165" class="small">ARMAZENAMENTO E TRANSFORMAÇÃO</text>
+  <text x="1080" y="165" class="small">CONSUMO</text>
+
+  <g filter="url(#shadow)">
+    <rect x="55" y="205" width="220" height="125" rx="14" fill="#fff" stroke="#3367d6" stroke-width="3"/>
+    <text x="80" y="245" class="box-title">PostgreSQL</text>
+    <text x="80" y="273" class="box-text">Schema ecommerce</text>
+    <text x="80" y="296" class="box-text">Change log + triggers</text>
+    <text x="80" y="318" class="box-text">Repositório Postgres</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="335" y="205" width="220" height="125" rx="14" fill="#fff" stroke="#f9ab00" stroke-width="3"/>
+    <text x="360" y="245" class="box-title">Python</text>
+    <text x="360" y="273" class="box-text">Full e incremental</text>
+    <text x="360" y="296" class="box-text">Parquet + checkpoints</text>
+    <text x="360" y="318" class="box-text">Cloud Run Jobs</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="615" y="205" width="220" height="125" rx="14" fill="#fff" stroke="#34a853" stroke-width="3"/>
+    <text x="640" y="245" class="box-title">GCS Landing</text>
+    <text x="640" y="273" class="box-text">Arquivos Parquet</text>
+    <text x="640" y="296" class="box-text">Retenção de 5 dias</text>
+    <text x="640" y="318" class="box-text">Carga idempotente</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="895" y="205" width="220" height="125" rx="14" fill="#fff" stroke="#4285f4" stroke-width="3"/>
+    <text x="920" y="245" class="box-title">BigQuery Bronze</text>
+    <text x="920" y="273" class="box-text">Dados brutos</text>
+    <text x="920" y="296" class="box-text">Eventos incrementais</text>
+    <text x="920" y="318" class="box-text">Controle por ambiente</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1175" y="205" width="170" height="125" rx="14" fill="#fff" stroke="#8e24aa" stroke-width="3"/>
+    <text x="1200" y="245" class="box-title">Dataform</text>
+    <text x="1200" y="273" class="box-text">Silver</text>
+    <text x="1200" y="296" class="box-text">Gold</text>
+    <text x="1200" y="318" class="box-text">Assertions</text>
+  </g>
+
+  <path d="M275 267 L335 267" class="arrow"/>
+  <path d="M555 267 L615 267" class="arrow"/>
+  <path d="M835 267 L895 267" class="arrow"/>
+  <path d="M1115 267 L1175 267" class="arrow"/>
+
+  <g filter="url(#shadow)">
+    <rect x="300" y="405" width="220" height="120" rx="14" fill="#fff" stroke="#1a73e8" stroke-width="3"/>
+    <text x="325" y="445" class="box-title">Cloud Scheduler</text>
+    <text x="325" y="473" class="box-text">A cada 6 horas</text>
+    <text x="325" y="496" class="box-text">Ambientes separados</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="590" y="405" width="220" height="120" rx="14" fill="#fff" stroke="#1a73e8" stroke-width="3"/>
+    <text x="615" y="445" class="box-title">Workflows</text>
+    <text x="615" y="473" class="box-text">Orquestração</text>
+    <text x="615" y="496" class="box-text">Retries e polling</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="880" y="405" width="220" height="120" rx="14" fill="#fff" stroke="#8e24aa" stroke-width="3"/>
+    <text x="905" y="445" class="box-title">Power BI</text>
+    <text x="905" y="473" class="box-text">View Presentation</text>
+    <text x="905" y="496" class="box-text">vw_vendas_powerbi</text>
+  </g>
+
+  <path d="M410 405 L410 350 L700 350 L700 330" class="arrow dashed"/>
+  <path d="M700 405 L700 350 L445 350 L445 330" class="arrow dashed"/>
+  <path d="M810 465 L880 465" class="arrow"/>
+
+  <g filter="url(#shadow)">
+    <rect x="55" y="610" width="390" height="90" rx="14" fill="#fff" stroke="#5f6368" stroke-width="2"/>
+    <text x="80" y="647" class="box-title">GitHub Actions</text>
+    <text x="80" y="675" class="box-text">CI/CD • Artifact Registry • Workload Identity Federation</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="505" y="610" width="390" height="90" rx="14" fill="#fff" stroke="#5f6368" stroke-width="2"/>
+    <text x="530" y="647" class="box-title">Segurança e operação</text>
+    <text x="530" y="675" class="box-text">Secret Manager • IAM • Alertas • Budget</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="955" y="610" width="390" height="90" rx="14" fill="#fff" stroke="#5f6368" stroke-width="2"/>
+    <text x="980" y="647" class="box-title">Camadas analíticas</text>
+    <text x="980" y="675" class="box-text">Bronze → Silver → Gold → Presentation</text>
+  </g>
+</svg>
