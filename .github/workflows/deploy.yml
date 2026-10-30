@@ -107,10 +107,13 @@ jobs:
       - name: Update Cloud Run ingestion job
         run: |
           ENVIRONMENT="${{ steps.config.outputs.environment }}"
-          gcloud run jobs update "ingestion-${ENVIRONMENT}" \
-            --image="${{ steps.image.outputs.image }}" \
-            --region="${{ env.REGION }}" \
-            --project="${{ env.PROJECT_ID }}"
+
+          for JOB_SUFFIX in "" "-full"; do
+            gcloud run jobs update "ingestion-${ENVIRONMENT}${JOB_SUFFIX}" \
+              --image="${{ steps.image.outputs.image }}" \
+              --region="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}"
+          done
 
       - name: Deploy orchestration workflow
         run: |
