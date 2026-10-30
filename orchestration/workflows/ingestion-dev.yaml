@@ -60,7 +60,7 @@ main:
         next: wait_before_dataform_poll
 
     - dataform_failed:
-        raise: ${"Dataform workflow failed with state: " + dataform_status.body.state}
+        raise: ${"Dataform workflow failed with state " + dataform_status.body.state}
 
     - dataform_timeout:
         raise: "Timeout aguardando a conclusão do Dataform após 60 minutos."
