@@ -28,7 +28,44 @@ main:
             workflowConfig: ${dataform_workflow_config}
         result: dataform_invocation
 
+    - initialize_dataform_polling:
+        assign:
+          - dataform_poll_attempt: 0
+
+    - wait_before_dataform_poll:
+        call: sys.sleep
+        args:
+          seconds: 15
+
+    - get_dataform_status:
+        call: http.get
+        args:
+          url: ${"https://dataform.googleapis.com/v1/" + dataform_invocation.body.name}
+          auth:
+            type: OAuth2
+        result: dataform_status
+
+    - increment_dataform_poll:
+        assign:
+          - dataform_poll_attempt: ${dataform_poll_attempt + 1}
+
+    - check_dataform_status:
+        switch:
+          - condition: ${dataform_status.body.state == "SUCCEEDED"}
+            next: finish
+          - condition: ${dataform_status.body.state == "FAILED" or dataform_status.body.state == "CANCELLED" or dataform_status.body.state == "CANCELING"}
+            next: dataform_failed
+          - condition: ${dataform_poll_attempt >= 240}
+            next: dataform_timeout
+        next: wait_before_dataform_poll
+
+    - dataform_failed:
+        raise: ${"Dataform workflow failed with state: " + dataform_status.body.state}
+
+    - dataform_timeout:
+        raise: "Timeout aguardando a conclusão do Dataform após 60 minutos."
+
     - finish:
         return:
           ingestion: ${ingestion_execution}
-          dataform: ${dataform_invocation.body}
+          dataform: ${dataform_status.body}
