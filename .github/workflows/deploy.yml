@@ -1,0 +1,103 @@
+name: Deploy data platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente de destino
+        required: true
+        type: choice
+        options:
+          - dev
+          - hom
+          - prod
+        default: dev
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: botbrewpub-ghsurp
+  REGION: us-central1
+  REPOSITORY: data-platform
+  IMAGE_NAME: ingestion
+
+jobs:
+  deploy:
+    name: Deploy ${{ github.event.inputs.environment || 'dev' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Define environment
+        id: config
+        shell: bash
+        run: |
+          TARGET_ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "environment=$TARGET_ENV" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/756989253873/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: sa-github-actions@botbrewpub-ghsurp.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication
+        run: gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build image
+        run: |
+          docker build \
+            --tag "${{ steps.config.outputs.image_uri }}:${GITHUB_SHA}" \
+            .
+
+      - name: Push image
+        run: docker push "${{ steps.config.outputs.image_uri }}:${GITHUB_SHA}"
+
+      - name: Resolve immutable image digest
+        id: image
+        shell: bash
+        run: |
+          DIGEST="$(gcloud artifacts docker images describe \
+            "${{ steps.config.outputs.image_uri }}:${GITHUB_SHA}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --format='value(image_summary.digest)')"
+
+          test -n "$DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "image=${{ steps.config.outputs.image_uri }}@$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Update Cloud Run ingestion job
+        run: |
+          ENVIRONMENT="${{ steps.config.outputs.environment }}"
+          gcloud run jobs update "ingestion-${ENVIRONMENT}" \
+            --image="${{ steps.image.outputs.image }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}"
+
+      - name: Deploy orchestration workflow
+        run: |
+          ENVIRONMENT="${{ steps.config.outputs.environment }}"
+          gcloud workflows deploy "orchestrator-${ENVIRONMENT}" \
+            --source="orchestration/workflows/ingestion-${ENVIRONMENT}.yaml" \
+            --location="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --service-account="sa-orchestrator-${ENVIRONMENT}@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
+
+      - name: Deployment summary
+        run: |
+          echo "Environment: ${{ steps.config.outputs.environment }}"
+          echo "Image: ${{ steps.image.outputs.image }}"
+          echo "Workflow: orchestrator-${{ steps.config.outputs.environment }}"
