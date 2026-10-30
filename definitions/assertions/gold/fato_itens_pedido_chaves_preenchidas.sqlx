@@ -1,0 +1,23 @@
+config {
+  type: "assertion",
+  schema: `${dataform.projectConfig.vars.environment}_assertions`,
+  name: "fato_itens_pedido_chaves_preenchidas",
+  tags: ["quality", "gold", "fact"]
+}
+
+SELECT
+  item_pedido_id,
+  pedido_id,
+  cliente_sk,
+  variante_sk,
+  produto_sk,
+  categoria_sk,
+  data_sk
+FROM ${ref(dataform.projectConfig.vars.environment + "_gold", "fato_itens_pedido")}
+WHERE item_pedido_id IS NULL
+   OR pedido_id IS NULL
+   OR cliente_sk IS NULL
+   OR variante_sk IS NULL
+   OR produto_sk IS NULL
+   OR categoria_sk IS NULL
+   OR data_sk IS NULL

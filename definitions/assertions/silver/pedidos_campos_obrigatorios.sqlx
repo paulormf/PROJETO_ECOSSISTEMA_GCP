@@ -1,0 +1,17 @@
+config {
+  type: "assertion",
+  schema: `${dataform.projectConfig.vars.environment}_assertions`,
+  name: "silver_pedidos_campos_obrigatorios",
+  tags: ["quality", "silver"]
+}
+
+SELECT
+  pedido_id,
+  cliente_id,
+  realizado_em,
+  status_pedido
+FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "pedidos")}
+WHERE pedido_id IS NULL
+   OR cliente_id IS NULL
+   OR realizado_em IS NULL
+   OR status_pedido IS NULL

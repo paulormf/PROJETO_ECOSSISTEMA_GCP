@@ -1,0 +1,22 @@
+config {
+  type: "assertion",
+  schema: `${dataform.projectConfig.vars.environment}_assertions`,
+  name: "fato_itens_pedido_valores_validos",
+  tags: ["quality", "gold", "fact"]
+}
+
+SELECT
+  item_pedido_id,
+  pedido_id,
+  quantidade,
+  preco_unitario,
+  desconto_total,
+  total_item
+FROM ${ref(
+  dataform.projectConfig.vars.environment + "_gold",
+  "fato_itens_pedido"
+)}
+WHERE quantidade <= 0
+   OR preco_unitario < 0
+   OR desconto_total < 0
+   OR total_item < 0

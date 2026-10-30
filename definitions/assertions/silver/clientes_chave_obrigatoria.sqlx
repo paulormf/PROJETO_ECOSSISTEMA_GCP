@@ -1,0 +1,11 @@
+config {
+  type: "assertion",
+  schema: `${dataform.projectConfig.vars.environment}_assertions`,
+  name: "silver_clientes_chave_obrigatoria",
+  tags: ["quality", "silver", "pii-protected"]
+}
+
+SELECT
+  cliente_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_silver", "clientes")}
+WHERE cliente_id IS NULL

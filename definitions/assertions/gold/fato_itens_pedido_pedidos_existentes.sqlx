@@ -1,0 +1,15 @@
+config {
+  type: "assertion",
+  schema: `${dataform.projectConfig.vars.environment}_assertions`,
+  name: "fato_itens_pedido_pedidos_existentes",
+  tags: ["quality", "gold", "fact"]
+}
+
+SELECT
+  f.item_pedido_id,
+  f.pedido_id
+FROM ${ref(dataform.projectConfig.vars.environment + "_gold", "fato_itens_pedido")} AS f
+LEFT JOIN ${ref(dataform.projectConfig.vars.environment + "_silver", "pedidos")} AS p
+  ON f.pedido_id = p.pedido_id
+WHERE f.pedido_id IS NULL
+   OR p.pedido_id IS NULL
