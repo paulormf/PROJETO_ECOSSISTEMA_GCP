@@ -54,8 +54,27 @@ Para `INSERT`, `old_row` sera nulo e `new_row` contera a linha completa. Para
 ## Retencao
 
 A retencao inicial do `audit.change_log` sera de 5 dias, conforme decidido
-para esta fase. Essa janela deve ser revisada antes da producao considerando o
-maior periodo esperado de indisponibilidade do pipeline.
+para esta fase. A limpeza sera executada manualmente, fora do horario de
+ingestao, somente depois de confirmar que os checkpoints de `dev`, `hom` e
+`prod` estao atualizados.
+
+Consulta para revisar os eventos elegiveis:
+
+```sql
+SELECT COUNT(*) AS registros_expirados
+FROM audit.change_log
+WHERE occurred_at < clock_timestamp() - INTERVAL '5 days';
+```
+
+Com os checkpoints validados, a limpeza pode ser executada manualmente:
+
+```sql
+DELETE FROM audit.change_log
+WHERE occurred_at < clock_timestamp() - INTERVAL '5 days';
+```
+
+Essa janela deve ser revisada antes da producao considerando o maior periodo
+esperado de indisponibilidade do pipeline.
 
 ## Integridade e desempenho
 
