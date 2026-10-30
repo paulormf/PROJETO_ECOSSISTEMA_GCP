@@ -1,0 +1,71 @@
+main:
+  steps:
+    - initialize:
+        assign:
+          - project_id: "botbrewpub-ghsurp"
+          - location: "us-central1"
+          - repository: "projects/botbrewpub-ghsurp/locations/us-central1/repositories/ecommerce-dataform"
+          - ingestion_job: "ingestion-prod"
+          - dataform_workflow_config: "projects/botbrewpub-ghsurp/locations/us-central1/repositories/ecommerce-dataform/workflowConfigs/wf-prod"
+
+    - run_ingestion:
+        call: googleapis.run.v1.namespaces.jobs.run
+        args:
+          name: ${"namespaces/" + project_id + "/jobs/" + ingestion_job}
+          location: ${location}
+          body: {}
+          connector_params:
+            timeout: 3600
+        result: ingestion_execution
+
+    - run_dataform:
+        call: http.post
+        args:
+          url: ${"https://dataform.googleapis.com/v1/" + repository + "/workflowInvocations"}
+          auth:
+            type: OAuth2
+          body:
+            workflowConfig: ${dataform_workflow_config}
+        result: dataform_invocation
+
+    - initialize_dataform_polling:
+        assign:
+          - dataform_poll_attempt: 0
+
+    - wait_before_dataform_poll:
+        call: sys.sleep
+        args:
+          seconds: 15
+
+    - get_dataform_status:
+        call: http.get
+        args:
+          url: ${"https://dataform.googleapis.com/v1/" + dataform_invocation.body.name}
+          auth:
+            type: OAuth2
+        result: dataform_status
+
+    - increment_dataform_poll:
+        assign:
+          - dataform_poll_attempt: ${dataform_poll_attempt + 1}
+
+    - check_dataform_status:
+        switch:
+          - condition: ${dataform_status.body.state == "SUCCEEDED"}
+            next: finish
+          - condition: ${dataform_status.body.state == "FAILED" or dataform_status.body.state == "CANCELLED" or dataform_status.body.state == "CANCELING"}
+            next: dataform_failed
+          - condition: ${dataform_poll_attempt >= 240}
+            next: dataform_timeout
+        next: wait_before_dataform_poll
+
+    - dataform_failed:
+        raise: ${"Dataform workflow failed with state " + dataform_status.body.state}
+
+    - dataform_timeout:
+        raise: "Timeout aguardando a conclusao do Dataform apos 60 minutos."
+
+    - finish:
+        return:
+          ingestion: ${ingestion_execution}
+          dataform: ${dataform_status.body}
