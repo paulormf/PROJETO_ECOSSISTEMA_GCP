@@ -12,6 +12,10 @@ on:
           - hom
           - prod
         default: dev
+      image_tag:
+        description: Tag da imagem já publicada (opcional; padrão é o commit atual)
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -36,16 +40,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Define environment
+      - name: Define deployment parameters
         id: config
         shell: bash
         run: |
           TARGET_ENV="${{ github.event.inputs.environment || 'dev' }}"
+          IMAGE_TAG_INPUT="${{ github.event.inputs.image_tag }}"
+
+          if [[ -n "$IMAGE_TAG_INPUT" ]]; then
+            IMAGE_TAG="$IMAGE_TAG_INPUT"
+          else
+            IMAGE_TAG="sha-${GITHUB_SHA}"
+          fi
+
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}"
+
           echo "environment=$TARGET_ENV" >> "$GITHUB_OUTPUT"
-          echo "image_uri=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Authenticate to Google Cloud
-        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/756989253873/locations/global/workloadIdentityPools/github-actions/providers/github-oidc
@@ -57,28 +71,37 @@ jobs:
       - name: Configure Docker authentication
         run: gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
 
-      - name: Build image
+      - name: Build and publish image once
+        shell: bash
         run: |
-          IMAGE_TAG="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
-          docker build \
-            --tag "${{ steps.config.outputs.image_uri }}:${IMAGE_TAG}" \
-            .
+          IMAGE="${{ steps.config.outputs.image_uri }}:${{ steps.config.outputs.image_tag }}"
 
-      - name: Push image
-        run: docker push "${{ steps.config.outputs.image_uri }}:${IMAGE_TAG}"
+          if gcloud artifacts docker images describe "$IMAGE" \
+            --project="${{ env.PROJECT_ID }}" \
+            --format='value(image_summary.digest)' >/dev/null 2>&1; then
+            echo "Image already exists. Reusing immutable artifact: $IMAGE"
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" != "push" ]]; then
+            echo "Image $IMAGE does not exist. Manual deployments only promote existing images."
+            echo "Run the build through a push to main first."
+            exit 1
+          fi
+
+          docker build --tag "$IMAGE" .
+          docker push "$IMAGE"
 
       - name: Resolve immutable image digest
         id: image
         shell: bash
         run: |
-          DIGEST="$(gcloud artifacts docker images describe \
-            "${{ steps.config.outputs.image_uri }}:${IMAGE_TAG}" \
+          IMAGE="${{ steps.config.outputs.image_uri }}:${{ steps.config.outputs.image_tag }}"
+          DIGEST="$(gcloud artifacts docker images describe "$IMAGE" \
             --project="${{ env.PROJECT_ID }}" \
             --format='value(image_summary.digest)')"
 
           test -n "$DIGEST"
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "image=${{ steps.config.outputs.image_uri }}@$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Update Cloud Run ingestion job
@@ -101,5 +124,6 @@ jobs:
       - name: Deployment summary
         run: |
           echo "Environment: ${{ steps.config.outputs.environment }}"
-          echo "Image: ${{ steps.image.outputs.image }}"
+          echo "Image tag: ${{ steps.config.outputs.image_tag }}"
+          echo "Image deployed: ${{ steps.image.outputs.image }}"
           echo "Workflow: orchestrator-${{ steps.config.outputs.environment }}"
